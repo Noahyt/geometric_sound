@@ -4,67 +4,78 @@ import mido
 import time
 import multiprocessing as mp
 import os
+from dataclasses import dataclass
 
 
 # TODO: don't hardcode.
 _PORT = mido.open_output('virtual_midi Bus 1')
 
 
-def play_note(note, delay, port=_PORT):
+@dataclass
+class Note:
+    """Keeps track of notes"""
+    note: int
+    volume: float
+    end_time: float = 0
+    duration: float = 0
+
+
+def start_note(note, port=_PORT):
     """Plays note for given amount of time."""
-
-    start_msg = mido.Message('note_on', note=note)
-    end_msg = mido.Message('note_off', note=note)
-
+    start_msg = mido.Message('note_on', note=note.note)
+    print("sending")
     port.send(start_msg)
 
-    # Wait.
-    time.sleep(delay)
 
+def end_note(note, port=_PORT):
+    end_msg = mido.Message('note_off', note=note.note)
     port.send(end_msg)
 
 
-def play_from_queue(queue):
-    while True:
-        item = queue.get()
-        if item is None:
-            queue.task_done()
-            break
-        else:
-            n, d = item
-        play_note(n, d)
-        queue.task_done()
-    print(f"closed {os.getpid()}")
+class Squeaker(object):
 
+    _play_notes = []
+    _hold_notes = []
 
-class Player(object):
-    """Supervises sending midi data."""
+    def __init__(self):
+        pass
 
-    _thread_count = None
-    _threadpool = None
-    _play_queue = None
+    def play_note(self, note):
+        print(f"playing note {note}")
+        self._play_notes.append(note)
 
-    def __init__(self, thread_count=12 * 10):
-        self._play_queue = mp.JoinableQueue()
-        self._thread_count = thread_count
-        self._threadpool = mp.Pool(
-            thread_count, play_from_queue, (self._play_queue,))
+    def tick(self, t):
+        """Performs playing operations based on external clock `t`"""
+        h_, e_ = self.check_end_notes(t)
 
-    def play_notes(self, notes):
-        """Adds notes to queue to be played."""
-        for n in notes:
-            self._play_queue.put(n)
+        # End old nodes.
+        for n in e_:
+            print("ending")
+            print(n)
+            end_note(n)
 
-    def wait_until_finished(self):
-        for _ in range(self._thread_count):
-            self._play_queue.put(None)
+        self._hold_notes = h_
+        just_queued = []
+        # Play new notes.
+        for n in self._play_notes:
+            print("starting ")
+            print(n)
+            start_note(n)
+            n.end_time = t + n.duration
+            self._hold_notes.append(n)
+        self._play_notes.clear()
 
-        self._threadpool.close()
-        print("pool closed")
-        self._threadpool.join()
-        print("pool joined")
+    def check_end_notes(self, t):
+        h_ = []
+        e_ = []
+        for n in self._hold_notes:
+            h_.append(n) if n.end_time > t else e_.append(n)
 
-        self._play_queue.close()
-        print("closed")
-        self._play_queue.join()
-        print("joined")
+        # Don't end notes that are still in queu. Playing takes priority.
+        playing_notes = map(lambda x: x.note, h_)
+
+        for n in e_:
+            if n.note in playing_notes:
+                e_.remove(n)
+
+        return h_, e_
