@@ -33,12 +33,20 @@ def map_dict_items(f, my_dictionary):
 class Delphi(play_geometry.SoundNetwork):
     """Adds functionality for interacting with Rhino."""
 
-    def set_up(self, nodes, edges, edge_curve):
+    def set_up(self, nodes, edges):
         """Sets up G with additional edge/node features for performance."""
+        self._init_edges = edges
+
         self.graph = play_geometry._initialize_graph(
             nodes, edges, digraph=True)
 
+        self.set_new_edge_attribute(False, "edge_played")
+        self.set_new_edge_attribute(0, "mite_count")
+
+    def update_geometry(self, edge_curve):
         # Add curves going in each direction.
+        edges = self._init_edges
+
         self.set_new_edge_attribute(
             _feature_dict(edges, edge_curve), 'edge_curve')
         self.set_new_edge_attribute(
@@ -50,12 +58,6 @@ class Delphi(play_geometry.SoundNetwork):
             _feature_dict(reversed_edges, edge_curve), 'edge_curve')
         self.set_new_edge_attribute(
             _feature_dict(reversed_edges, [_REVERSE] * len(reversed_edges)), 'curve_direction')
-
-        self.set_new_edge_attribute(False, "edge_played")
-        self.set_new_edge_attribute(0, "mite_count")
-
-        # Initialize default tuner.
-        self.tuner = play_geometry.Tuner(1, 1)
 
     def add_edge_data(self, edges, edge_data, edge_data_names):
         """Adds data associated with edges."""

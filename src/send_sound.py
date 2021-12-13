@@ -23,7 +23,6 @@ class Note:
 def start_note(note, port=_PORT):
     """Plays note for given amount of time."""
     start_msg = mido.Message('note_on', note=note.note)
-    print("sending")
     port.send(start_msg)
 
 
@@ -41,7 +40,6 @@ class Squeaker(object):
         pass
 
     def play_note(self, note):
-        print(f"playing note {note}")
         self._play_notes.append(note)
 
     def tick(self, t):
@@ -50,16 +48,12 @@ class Squeaker(object):
 
         # End old nodes.
         for n in e_:
-            print("ending")
-            print(n)
             end_note(n)
 
         self._hold_notes = h_
         just_queued = []
         # Play new notes.
         for n in self._play_notes:
-            print("starting ")
-            print(n)
             start_note(n)
             n.end_time = t + n.duration
             self._hold_notes.append(n)

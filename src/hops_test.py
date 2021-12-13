@@ -133,25 +133,26 @@ def list_from_tree(tree):
     name="Delphi Add Mite",
     inputs=[hs.HopsBoolean("Add", "Add", "If `True`, Adds Mite."),
             hs.HopsInteger("Edges", "E", access=hs.HopsParamAccess.TREE),
-            hs.HopsNumber("Speed", "Speed", access=hs.HopsParamAccess.TREE)],
+            hs.HopsNumber("Speed", "Speed", access=hs.HopsParamAccess.TREE),
+            hs.HopsInteger("End Behavior", "EB", access=hs.HopsParamAccess.TREE)],
 )
-def delphi_add_explorer(trigger, edges, speed):
+def delphi_add_explorer(trigger, edges, speed, end_behavior):
     """Adds explorers to edges specified."""
     edges = list_from_tree(edges)
     speed = list_from_tree(speed)[0]
+    end_behavior = list_from_tree(end_behavior)[0]
     if trigger:
-        for e, s in zip(edges, speed):
+        for e, s, eb in zip(edges, speed, end_behavior):
             with lock:
-                sn.add_explorer(e, natural_speed=s)
+                sn.add_explorer(e, natural_speed=s, end_behavior=eb)
 
 
 @hops.component(
-    "/delphi_setup",
-    name="Delphi Setuop",
-    description="Set up Delphi.",
+    "/delphi_update_geometry",
+    name="Delphi Update Geometry",
+    description="Update Geometry.",
     inputs=[
-        hs.HopsInteger("Nodes", "N", access=hs.HopsParamAccess.TREE),
-        hs.HopsInteger("Edges", "E", access=hs.HopsParamAccess.TREE),
+        hs.HopsBoolean("Trigger", "Trigger", "Updates topology."),
         hs.HopsCurve("Edge Curves", "Edge Curves",
                      access=hs.HopsParamAccess.TREE),
         hs.HopsNumber("Speed", "Speed", access=hs.HopsParamAccess.TREE),
@@ -163,76 +164,56 @@ def delphi_add_explorer(trigger, edges, speed):
         ],
     outputs=[]
         )
-def delphi_setup(nodes, edges, edge_path, speed, note, note_velocity, duration):
-    nodes = list_from_tree(nodes)[0]
-    edges = list_from_tree(edges)
-    print(edges)
-    edge_path = list_from_tree(edge_path)[0]
-    speed = list_from_tree(speed)[0]
-    note = list_from_tree(note)[0]
-    note = [*map(lambda x: clamp(x, 0, 127), note)]
-    print(note)
-    note_velocity = list_from_tree(note_velocity)[0]
+def delphi_update_geometry(trigger, edge_path, speed, note, note_velocity, duration):
+    if trigger:
+        edge_path = list_from_tree(edge_path)[0]
+        speed = list_from_tree(speed)[0]
+        note = list_from_tree(note)[0]
+        note = [*map(lambda x: clamp(x, 0, 127), note)]
+        note_velocity = list_from_tree(note_velocity)[0]
 
-    duration = list_from_tree(duration)[0]
+        duration = list_from_tree(duration)[0]
 
-    if len(speed) == 1:
-        speed = speed[0]
-    if len(note) == 1:
-        note = note[0]
-    if len(note_velocity) == 1:
-        note_velocity = note_velocity[0]
-    if len(duration) == 1:
-        duration = duration[0]
+        if len(speed) == 1:
+            speed = speed[0]
+        if len(note) == 1:
+            note = note[0]
+        if len(note_velocity) == 1:
+            note_velocity = note_velocity[0]
+        if len(duration) == 1:
+            duration = duration[0]
 
-    # Validate nodes.
-    if not all([isinstance(o, int) for o in nodes]):
-        raise ValueError("Invalid nodes.")
+        with lock:
+            sn.add_node_data(sn.graph.nodes, [note, note_velocity, duration], [
+                             "note", "note_velocity", "duration"])
 
-    with lock:
-        sn.set_up(nodes, edges, edge_path)
-        sn.add_edge_data(
-            edges, [speed], ["speed"])
-        sn.add_node_data(
-            nodes, [note, note_velocity, duration], ["note", "note_velocity", "duration"])
-        print(sn.graph[0])
+            sn.update_geometry(edge_path)
+            sn.add_edge_data(
+                sn._init_edges, [speed], ["speed"])
 
-# @hops.component(
-#     "/delphi_setup",
-#     name="Delphi Setuop",
-#     description="Set up Delphi.",
-#     inputs=[
-#         hs.HopsInteger("Nodes", "N", access=hs.HopsParamAccess.TREE),
-#         hs.HopsInteger("Edges", "E", access=hs.HopsParamAccess.TREE),
-#         hs.HopsCurve("EdgePath", "EP", access=hs.HopsParamAccess.TREE),
-#         hs.HopsNumber("Node Data", "ND", access=hs.HopsParamAccess.TREE),
-#         hs.HopsString("Node Data Names",
-#                       "NDN",
-#                       access=hs.HopsParamAccess.TREE),
-#         hs.HopsNumber("Edge Data", "ED", access=hs.HopsParamAccess.TREE),
-#         hs.HopsString("Edge Data Names", "EDN", access=hs.HopsParamAccess.TREE)],
-#     outputs=[]
-#         )
-# def delphi_setup(nodes, edges, edge_path, node_data, node_data_names, edge_data, edge_data_names):
-#     nodes = list_from_tree(nodes)[0]
-#     edges = list_from_tree(edges)
-#     node_data = list_from_tree(node_data)
-#     edge_data = list_from_tree(edge_data)
-#     edge_data_names = list_from_tree(edge_data_names)[0]
-#     edge_path = list_from_tree(edge_path)[0]
-#
-#     print(edge_data)
-#     print(edge_data_names)
-#
-#     print(f"node data {node_data}")
-#
-#     # Validate nodes.
-#     if not all([isinstance(o, int) for o in nodes]):
-#         raise ValueError("Invalid nodes.")
-#
-#     with lock:
-#         sn.set_up(nodes, edges, edge_path)
-#         sn.add_edge_data(edges, edge_data, edge_data_names)
+
+@hops.component(
+    "/delphi_setup",
+    name="Delphi Setuop",
+    description="Set up Delphi.",
+    inputs=[
+        hs.HopsBoolean("Setup", "Setup", "Updates topology."),
+        hs.HopsInteger("Nodes", "N", access=hs.HopsParamAccess.TREE),
+        hs.HopsInteger("Edges", "E", access=hs.HopsParamAccess.TREE)
+        ],
+    outputs=[]
+        )
+def delphi_setup(trigger, nodes, edges):
+    if trigger:
+        nodes = list_from_tree(nodes)[0]
+        edges = list_from_tree(edges)
+
+        # Validate nodes.
+        if not all([isinstance(o, int) for o in nodes]):
+            raise ValueError("Invalid nodes.")
+
+        with lock:
+            sn.set_up(nodes, edges)
 
 
 @ hops.component(
@@ -245,7 +226,11 @@ def delphi_setup(nodes, edges, edge_path, speed, note, note_velocity, duration):
     )
 def delphi_state():
     with lock:
-        return sn.state()
+        try:
+            s = sn.state()
+        except Exception:
+            s = 0
+        return s
 
 
 @ hops.component(
