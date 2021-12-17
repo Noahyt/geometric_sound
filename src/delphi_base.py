@@ -7,10 +7,7 @@ generation."""
 import networkx as nx
 import numpy as np
 
-
 import explorer
-
-from itertools import compress
 
 
 def _initialize_graph(nodes, edges, digraph=False):
@@ -54,16 +51,18 @@ def add_length(graph, positions, name="length"):
     _add_edge_feature_to_graph(graph, length, name=name)
 
 
-class SoundNetwork(object):
-    """Coordinates sound generation using `Players` on a graph.
+class DelphiBase(object):
+    """Sound generation on a graph.
 
     Each time step consists of a sequence of actions:
 
-    1. Update Explorer locations.
+    1. Update `Explorer` locations.
     2. Perform operations associated with Explorers.
     3. Generate sound.
 
-    Note that we process all sound events at the end of the time step to ensure that they are played by the `Player` as synchronized as possible."""
+    Note that we process all sound events at the end of the time step to ensure
+    that they are played simultanously.
+    """
 
     _graph: nx.DiGraph = None
     _explorers = None
@@ -174,61 +173,3 @@ class SoundNetwork(object):
 
     def initialize_new_explorers(self, node):
         """Defines procedure for generating new explorers."""
-
-
-class Tuner(object):
-    """Simple class to help tune scalar data into notes for Midi.
-
-    See https://en.wikipedia.org/wiki/MIDI_tuning_standard.
-
-    We scale pitch logarithmically with changes in data. """
-
-    _A4 = None
-    _scale = None
-    _MIDI_CONCERT_A = 69
-
-    def __init__(self, A4, scale):
-        self._A4 = A4
-        self._scale = scale
-
-    def tune(self, data, clip_to_int=True):
-        data = self._MIDI_CONCERT_A + (data - self._A4) * self._scale
-        if clip_to_int:
-            return int(data)
-        return data
-
-
-class LengthNetwork(SoundNetwork):
-    """Plays notes corresponding to length of edges."""
-
-    def set_up(self):
-        """Sets up G with additional edge/node features for performance."""
-        self.tuner = Tuner(1, 2)
-        nx.set_edge_attributes(self.graph, False, "edge_played")
-
-    def explorer_at_end(self, e, node):
-        n, ed, edge_data = self.edge_data(node)
-        print(n)
-
-        # Need to keep track to stop after all played.
-        played_before = _get_edge_data(edge_data, "edge_played")
-        print(played_before)
-
-        for n_, d_ in zip(n, edge_data):
-            l_ = 1.
-            pb_ = d_["edge_played"]
-            if not pb_:
-                note = (self.tuner.tune(l_), 1)
-                self.play_note(note)
-                d_["edge_played"] = True
-        self.remove_explorer(e)
-
-        traversed_edge_endpoint = [n_ for n_ in n if n_ == e.node_a]
-        new_endpoint = [n_ for n_ in n if n_ != e.node_a]
-
-        played_endpoint = [*compress(n, played_before)]
-        print(played_endpoint)
-
-        for new_node in new_endpoint:
-            if new_node not in played_endpoint:
-                self.add_explorer(node, new_node, speed=1)

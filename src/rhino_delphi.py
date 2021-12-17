@@ -1,12 +1,11 @@
 """SoundNetwork for Grasshopper."""
 
-import rhino3dm
-
-import play_geometry
+import delphi_base
 
 import send_sound
 
 from operator import itemgetter
+import random
 
 
 _FORWARD = 0
@@ -30,14 +29,14 @@ def map_dict_items(f, my_dictionary):
     return {k: f(v) for k, v in my_dictionary.items()}
 
 
-class Delphi(play_geometry.SoundNetwork):
+class Delphi(delphi_base.DelphiBase):
     """Adds functionality for interacting with Rhino."""
 
     def set_up(self, nodes, edges):
         """Sets up G with additional edge/node features for performance."""
         self._init_edges = edges
 
-        self.graph = play_geometry._initialize_graph(
+        self.graph = delphi_base._initialize_graph(
             nodes, edges, digraph=True)
 
         self.set_new_edge_attribute(False, "edge_played")
@@ -74,12 +73,6 @@ class Delphi(play_geometry.SoundNetwork):
         """Adds data associated with nodes."""
         for nd, name in zip(node_data, node_data_names):
             self.set_new_node_attribute(_feature_dict(nodes, nd), name)
-
-    def update_tuner(self, A4=None, scale=None):
-        if A4 is not None:
-            self.tuner._A4 = A4
-        if scale is not None:
-            self.tuner._scale = scale
 
     def edge_speed(self, edge):
         """Computes speed for explorer on edge."""
@@ -131,6 +124,17 @@ class Delphi(play_geometry.SoundNetwork):
                 if mc < 1:
                     self.add_explorer(a_e, e._natural_speed,
                                       end_behavior=e._end_behavior)
+
+        if e.end_behavior == e._RANDOM:
+            possible_edges = []
+            for a_e in adjacent_edges:
+                mc = self.graph[a_e[0]][a_e[1]]["mite_count"] + \
+                    self.graph[a_e[1]][a_e[0]]["mite_count"]
+                if mc < 1:
+                    possible_edges.append(a_e)
+            new_edge = random.choice(possible_edges)
+            self.add_explorer(new_edge, e._natural_speed,
+                              end_behavior=e._end_behavior)
 
         # # Bounce.
         if e.end_behavior == e._BOUNCE:

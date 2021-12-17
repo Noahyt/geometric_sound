@@ -9,6 +9,7 @@ import re
 
 import rhino_delphi
 import send_sound
+import hops_utils
 
 import multiprocessing as mp
 
@@ -68,69 +69,16 @@ def delphi_updater(audio_pipe):
         time.sleep(1/50 - time.time() * 50 % 1 / 50)
 
 
-def increment(audio_pipe):
-    """Test incrementer."""
-
-
-@app.route("/test")
+@app.route("/explorer_count")
 def test():
     with lock:
-        print(sn._explorers)
-        return f"{len(sn._explorers)}"
-
-
-def _parse_tree_key(k):
-    """Extracts coordinates from key"""
-    # Extract coordinates.
-    k = re.findall('{(.*?)}', k)[0]
-
-    # Split by `;` to get individual indices.
-    k = k.split(r';')
-
-    return [int(k_) for k_ in k]
-
-
-def _insert_at(mod_list, coor, data):
-    """Inserts `data` into `mod_list` at `coor`.
-
-    `coor` in general may be a list of coordinates. This function then
-    recursively inserts lists until the appropriate level is reached.
-    """
-    if len(mod_list) < coor[0]:
-        raise ValueError("List too short.")
-    # TODO: Need to make clear whether this will ALWAYS add new items or
-    # add to existing lists if they exis.
-    if len(coor) > 1:
-        # If list doesn't exist, insert one.
-        if len(mod_list) <= coor[0]:
-            mod_list.insert(coor[0], [])
-        if not isinstance(mod_list[coor[0]], list):
-            raise ValueError(
-                "Cannot insert data at requested level. Not a list.")
-        _insert_at(mod_list[coor[0]], coor[1:], data)
-    else:
-        mod_list.insert(coor[0], data)
-
-
-def list_from_tree(tree):
-    """Constructs list of list containing data in `tree`.
-
-    It is useful to construct a list representation first, since different
-    final indices may contain different.
-    """
-    address = [_parse_tree_key(k) for k in tree.keys()]
-    data = tree.values()
-
-    # Instantiate list which we will fill in whith data at `address`.
-    lt = []
-
-    [_insert_at(lt, a, d) for a, d in zip(address, data)]
-    return lt
+        e = len(sn._explorers)
+    return e
 
 
 @hops.component(
     '/delphi_add_mite',
-    name="Delphi Add Mite",
+    name="Delphi Add Oracle",
     inputs=[hs.HopsBoolean("Add", "Add", "If `True`, Adds Mite."),
             hs.HopsInteger("Edges", "E", access=hs.HopsParamAccess.TREE),
             hs.HopsNumber("Speed", "Speed", access=hs.HopsParamAccess.TREE),
@@ -138,9 +86,9 @@ def list_from_tree(tree):
 )
 def delphi_add_explorer(trigger, edges, speed, end_behavior):
     """Adds explorers to edges specified."""
-    edges = list_from_tree(edges)
-    speed = list_from_tree(speed)[0]
-    end_behavior = list_from_tree(end_behavior)[0]
+    edges = hops_utils.list_from_tree(edges)
+    speed = hops_utils.list_from_tree(speed)[0]
+    end_behavior = hops_utils.list_from_tree(end_behavior)[0]
     if trigger:
         for e, s, eb in zip(edges, speed, end_behavior):
             with lock:
@@ -166,13 +114,13 @@ def delphi_add_explorer(trigger, edges, speed, end_behavior):
         )
 def delphi_update_geometry(trigger, edge_path, speed, note, note_velocity, duration):
     if trigger:
-        edge_path = list_from_tree(edge_path)[0]
-        speed = list_from_tree(speed)[0]
-        note = list_from_tree(note)[0]
+        edge_path = hops_utils.list_from_tree(edge_path)[0]
+        speed = hops_utils.list_from_tree(speed)[0]
+        note = hops_utils.list_from_tree(note)[0]
         note = [*map(lambda x: clamp(x, 0, 127), note)]
-        note_velocity = list_from_tree(note_velocity)[0]
+        note_velocity = hops_utils.list_from_tree(note_velocity)[0]
 
-        duration = list_from_tree(duration)[0]
+        duration = hops_utils.list_from_tree(duration)[0]
 
         if len(speed) == 1:
             speed = speed[0]
@@ -194,7 +142,7 @@ def delphi_update_geometry(trigger, edge_path, speed, note, note_velocity, durat
 
 @hops.component(
     "/delphi_setup",
-    name="Delphi Setuop",
+    name="Delphi Setup",
     description="Set up Delphi.",
     inputs=[
         hs.HopsBoolean("Setup", "Setup", "Updates topology."),
@@ -205,8 +153,8 @@ def delphi_update_geometry(trigger, edge_path, speed, note, note_velocity, durat
         )
 def delphi_setup(trigger, nodes, edges):
     if trigger:
-        nodes = list_from_tree(nodes)[0]
-        edges = list_from_tree(edges)
+        nodes = hops_utils.list_from_tree(nodes)[0]
+        edges = hops_utils.list_from_tree(edges)
 
         # Validate nodes.
         if not all([isinstance(o, int) for o in nodes]):
@@ -233,7 +181,7 @@ def delphi_state():
         return s
 
 
-@ hops.component(
+@hops.component(
     "/run_delphi",
     name="run_delphi",
     description="Controls Delphi",
@@ -259,23 +207,6 @@ def run_delphi(start, pause, reset, speed):
         with lock:
             sn.reset()
     return None
-
-
-@hops.component(
-    "/tuner",
-    name="tuner",
-    description="Control tuning.",
-    inputs=[
-        hs.HopsNumber("A4", "A4", "Sets A4 value.",
-                      access=hs.HopsParamAccess.ITEM, optional=True),
-        hs.HopsNumber(
-            "Scale", "Scale", "Controls speed of     explorers on graph.", access=hs.HopsParamAccess.ITEM, optional=True),
-    ]
-)
-def tuner(A4, scale):
-    """Customizes tuner used by delphi."""
-    with lock:
-        sn.update_tuner(A4, scale)
 
 
 def run_app():
@@ -334,10 +265,3 @@ if __name__ == "__main__":
 
     p_audio.start()
     p_delphi.start()
-
-    # t1 = threading.Thread(target=run_app)
-    # t2 = threading.Thread(target=increment, args=(sn,))
-    # t1.start()
-    # t2.start()
-
-    # t2.start()

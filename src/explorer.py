@@ -16,6 +16,7 @@ class Explorer(object):
     _at_end = False
     _BOUNCE = 0
     _EXPLODE = 1
+    _RANDOM = 2
 
     def __init__(self, edge, speed, natural_speed, location=0, end_behavior=_BOUNCE):
         self._edge = edge
